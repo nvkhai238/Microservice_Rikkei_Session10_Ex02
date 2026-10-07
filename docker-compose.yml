@@ -1,0 +1,42 @@
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093,HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  topic-init:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-ec"]
+    command: >-
+      for spec in medicine-stock-events:3 medicine-price-updates:1 pharmacy-notifications:2; do
+        topic="$${spec%:*}";
+        partitions="$${spec##*:}";
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$${topic}" --partitions "$${partitions}" --replication-factor 1;
+      done;
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+    restart: "no"
+
+volumes:
+  kafka_data:
